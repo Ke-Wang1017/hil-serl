@@ -1,8 +1,12 @@
 from abc import abstractmethod
 from typing import List
+from franka_env.envs.wrappers import (
+    ControllerType
+)
 
 class DefaultTrainingConfig:
     """Default training configuration. """
+    controller_type: ControllerType = ControllerType.XBOX
 
     agent: str = "drq"
     max_traj_length: int = 100

@@ -9,7 +9,8 @@ from franka_env.envs.wrappers import (
     JoystickIntervention,
     MultiCameraBinaryRewardClassifierWrapper,
     GripperPenaltyWrapper,
-    GripperCloseEnv
+    GripperCloseEnv,
+    ControllerType
 )
 from franka_env.envs.relative_env import RelativeFrame
 from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
@@ -21,6 +22,7 @@ from franka_sim.envs.panda_pick_gym_env import PandaPickCubeGymEnv
 
 
 class TrainConfig(DefaultTrainingConfig):
+    controller_type = ControllerType.XBOX
     image_keys = ["front", "wrist"]
     classifier_keys = ["front", "wrist"]
     proprio_keys = ["tcp_pose", "tcp_vel", "gripper_pose"]
@@ -38,7 +40,7 @@ class TrainConfig(DefaultTrainingConfig):
     def get_environment(self, fake_env=False, save_video=False, classifier=False):
         env = PandaPickCubeGymEnv(render_mode="human", image_obs=True, time_limit=100.0, control_dt=0.1)
         if not fake_env:
-            env = JoystickIntervention(env)
+            env = JoystickIntervention(env=env, controller_type=self.controller_type)
         env = RelativeFrame(env)
         env = Quat2EulerWrapper(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)

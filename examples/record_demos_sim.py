@@ -42,6 +42,7 @@ def main(_):
     trajectory = []
     returns = 0
     
+    print("Press shift to start recording.\nIf your controller is not working check controller_type (default is xbox) is configured in examples/experiments/pick_cube_sim/config.py")
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         while viewer.is_running():
             if start_key:

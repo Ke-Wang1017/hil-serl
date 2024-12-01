@@ -43,8 +43,10 @@ def main(_):
     success_needed = FLAGS.successes_needed
     pbar = tqdm(total=success_needed)
     
+    print("Press shift to start recording, press enter to record a successful transition.\nIf your controller is not working check controller_type (default is xbox) is configured in examples/experiments/pick_cube_sim/config.py")
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         while viewer.is_running():
+            
             if start_key:
                 actions = np.zeros(env.action_space.sample().shape) 
                 next_obs, rew, done, truncated, info = env.step(actions)
