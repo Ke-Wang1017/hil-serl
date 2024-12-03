@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any, Literal, Tuple, Dict
 
-import gym
+# import gym
+import gymnasium as gym
 import mujoco
 import numpy as np
 from gymnasium import spaces
@@ -59,7 +60,11 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         }
 
         self.render_mode = render_mode
-        self.camera_id = (0, 1)
+        camera_name_1 = "front"
+        camera_name_2 = "handcam_rgb"
+        camera_id_1 = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name_1)
+        camera_id_2 = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name_2)
+        self.camera_id = (camera_id_1, camera_id_2)
         self.image_obs = image_obs
         
         # Caching.
@@ -132,13 +137,20 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
             dtype=np.float32,
         )
 
-        from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+        # from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-        self._viewer = MujocoRenderer(
+        # self._viewer = MujocoRenderer(
+        #     self.model,
+        #     self.data,
+        # )
+        # self._viewer.render(self.render_mode)
+
+        self._viewer = mujoco.Renderer(
             self.model,
-            self.data,
+            height=render_spec.height,
+            width=render_spec.width
         )
-        self._viewer.render(self.render_mode)
+        self._viewer.render()
 
     def reset(
         self, seed=None, **kwargs
@@ -218,13 +230,24 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         return obs, rew, terminated, False, {"succeed": success}
 
     def render(self):
-        self._viewer.render(self.render_mode)
+        self._viewer.render()
         rendered_frames = []
         for cam_id in self.camera_id:
+            self._viewer.update_scene(self.data, camera=cam_id)
             rendered_frames.append(
-                self._viewer.render(render_mode="rgb_array", camera_id=cam_id)
+                self._viewer.render()
             )
+            self._viewer.render()
         return rendered_frames
+
+    # def render(self):
+    #     self._viewer.render(self.render_mode)
+    #     rendered_frames = []
+    #     for cam_id in self.camera_id:
+    #         rendered_frames.append(
+    #             self._viewer.render(render_mode="rgb_array", camera_id=cam_id)
+    #         )
+    #     return rendered_frames
 
     def _compute_observation(self) -> dict:
         obs = {}

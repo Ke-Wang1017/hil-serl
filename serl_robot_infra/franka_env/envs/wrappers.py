@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import Box
 import copy
-from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert
+from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert, JoystickExpert, ControllerType
 import requests
 from scipy.spatial.transform import Rotation as R
 from franka_env.envs.franka_env import FrankaEnv
@@ -401,201 +401,40 @@ class DualGripperPenaltyWrapper(gym.RewardWrapper):
         reward = self.reward(reward, action)
         return observation, reward, terminated, truncated, info
 
-
-
-
-class ControllerType(Enum):
-    PS5 = "ps5"
-    XBOX = "xbox"
-
-@dataclass
-class ControllerConfig:
-    resolution: dict
-    scale: dict
-
 class JoystickIntervention(gym.ActionWrapper):
-    CONTROLLER_CONFIGS = {
-        ControllerType.PS5: ControllerConfig(
-            # PS5 controller joystick values have 8 bit resolution [0, 255]
-            resolution={
-                'ABS_X': 2**8,
-                'ABS_Y': 2**8,
-                'ABS_RX': 2**8,
-                'ABS_RY': 2**8,
-                'ABS_Z': 2**8,
-                'ABS_RZ': 2**8,
-                'ABS_HAT0X': 1.0,
-            },
-            scale={
-                'ABS_X': 0.4,
-                'ABS_Y': 0.4,
-                'ABS_RX': 0.5,
-                'ABS_RY': 0.5,
-                'ABS_Z': 0.8,
-                'ABS_RZ': 1.2,
-                'ABS_HAT0X': 0.5,
-            }
-        ),
-        ControllerType.XBOX: ControllerConfig(
-            # XBOX controller joystick values have 16 bit resolution [0, 65535]
-            resolution={
-                'ABS_X': 2**16,
-                'ABS_Y': 2**16,
-                'ABS_RX': 2**16,
-                'ABS_RY': 2**16,
-                'ABS_Z': 2**8,
-                'ABS_RZ': 2**8,
-                'ABS_HAT0X': 1.0,
-            },
-            scale={
-                'ABS_X': -0.1,
-                'ABS_Y': -0.1,
-                'ABS_RX': 0.3,
-                'ABS_RY': 0.3,
-                'ABS_Z': 0.05,
-                'ABS_RZ': 0.05,
-                'ABS_HAT0X': 0.3,
-            }
-        ),
-    }
-
     def __init__(self, env, action_indices=None, controller_type=ControllerType.XBOX):
         super().__init__(env)
-        
+
         self.gripper_enabled = True
         if self.action_space.shape == (6,):
             self.gripper_enabled = False
-        # we can set action_indices to choose which action to intervene on
-        # e.g. action_indices=[0, 1, 2] will only intervene on the position control
-        self.action_indices = action_indices 
-        self.controller_type = controller_type
-        self.controller_config = self.CONTROLLER_CONFIGS[controller_type]
-        
-        # Controller state
-        self.x_axis = 0
-        self.y_axis = 0
-        self.z_axis = 0
-        self.rx_axis = 0
-        self.ry_axis = 0
-        self.rz_axis = 0
-        self.left = False   # Left bumper for close gripper
-        self.right = False  # Right bumper for open gripper
-        
-        # Start controller reading thread
-        self.running = True
-        self.thread = threading.Thread(target=self._read_gamepad)
-        self.thread.daemon = True
-        self.thread.start()
-    
-    def _reset_cmds(self):
-        self.x_axis = 0
-        self.y_axis = 0
-        self.z_axis = 0
-        self.rx_axis = 0
-        self.ry_axis = 0
-        self.rz_axis = 0
-    
-    def _read_gamepad(self):
-        useful_codes = ['ABS_X', 'ABS_Y', 'ABS_RX', 'ABS_RY', 'ABS_Z', 'ABS_RZ', 'ABS_HAT0X']
-        
-        # Store consecutive event counters and values
-        event_counter = {
-            'ABS_X': 0,
-            'ABS_Y': 0,
-            'ABS_RX': 0,
-            'ABS_RY': 0,
-            'ABS_Z': 0,
-            'ABS_RZ': 0,
-            'ABS_HAT0X': 0,
-        }
-    
-        while self.running:
-            try:
-                # Get fresh events
-                events = inputs.get_gamepad()
-                latest_events = {}
-                for event in events:
-                    latest_events[event.code] = event.state
-                # Process events
-                for code in useful_codes:
-                    if code in latest_events:
-                        event_counter[code] += 1
-                        current_value = latest_events[code]
-                                            
-                    # Only update if we've seen the same value 2 times
-                    if event_counter[code] >= 1:
-                        # Calculate relative changes based on the axis
-                        # Normalize the joystick input values to range [-1, 1] expected by the environment
-                        resolution = self.controller_config.resolution[code]
-                        if self.controller_type == ControllerType.PS5:
-                            normalized_value = (current_value - (resolution / 2)) / (resolution / 2)
-                        else:
-                            normalized_value = current_value / (resolution / 2)
-                        scaled_value = normalized_value * self.controller_config.scale[code]
 
-                        if code == 'ABS_Y':
-                            self.x_axis = scaled_value
-                        elif code == 'ABS_X':
-                            self.y_axis = scaled_value
-                        elif code == 'ABS_RZ':
-                            self.z_axis = scaled_value
-                        elif code == 'ABS_Z':
-                            # Flip sign so this will go in the down direction
-                            self.z_axis = -scaled_value
-                        elif code == 'ABS_RX':
-                            self.rx_axis = scaled_value
-                        elif code == 'ABS_RY':
-                            self.ry_axis = scaled_value
-                        elif code == 'ABS_HAT0X':
-                            self.rz_axis = scaled_value
-                        # Reset counter after update
-                        event_counter[code] = 0
-                        # print("cmd", code, self.x_axis, self.y_axis, self.z_axis, self.rx_axis, self.ry_axis, self.rz_axis)
-                
-                # Handle button events immediately
-                if 'BTN_TL' in latest_events:
-                    self.left = bool(latest_events['BTN_TL'])
-                    self._reset_cmds()
-                if 'BTN_TR' in latest_events:
-                    self.right = bool(latest_events['BTN_TR'])
-                    self._reset_cmds()
-                
-            except inputs.UnpluggedError:
-                print("No controller found. Retrying...")
-                time.sleep(1)
+        self.action_indices = action_indices
 
-    def action(self, action):
+        self.expert = JoystickExpert(controller_type=controller_type)
+        self.left, self.right = False, False
+
+    def action(self, action: np.ndarray) -> np.ndarray:
         """
         Input:
         - action: policy action
         Output:
-        - action: joystick action if nonzero; else, policy action
+        - action: joystick action if nonezero; else, policy action
         """
-        # Get joystick action
-        deadzone = 0.03
-        expert_a = np.zeros(6)
-        
-        expert_a[0] = self.x_axis if abs(self.x_axis) > deadzone else 0
-        expert_a[1] = self.y_axis if abs(self.y_axis) > deadzone else 0
-        expert_a[2] = self.z_axis if abs(self.z_axis) > deadzone else 0
+        deadzone = 0.001
 
-        # Apply deadzone to rotation control
-        expert_a[3] = self.rx_axis if abs(self.rx_axis) > deadzone else 0
-        expert_a[4] = self.ry_axis if abs(self.ry_axis) > deadzone else 0
-        expert_a[5] = self.rz_axis if abs(self.rz_axis) > deadzone else 0
-
-        self._reset_cmds()
-        
+        expert_a, buttons = self.expert.get_action()
+        self.left, self.right = tuple(buttons)
         intervened = False
-        if np.linalg.norm(expert_a) > 0.001 or self.left or self.right:
+
+        if np.linalg.norm(expert_a) > deadzone:
             intervened = True
 
-
         if self.gripper_enabled:
-            if self.left:  # close gripper
+            if self.left: # close gripper
                 gripper_action = np.random.uniform(-1, -0.9, size=(1,))
                 intervened = True
-            elif self.right:  # open gripper
+            elif self.right: # open gripper
                 gripper_action = np.random.uniform(0.9, 1, size=(1,))
                 intervened = True
             else:
@@ -604,26 +443,26 @@ class JoystickIntervention(gym.ActionWrapper):
             # expert_a[:6] += np.random.uniform(-0.5, 0.5, size=6)
 
         if self.action_indices is not None:
-            filtered_expert_a = np.zeros_like(expert_a)
-            filtered_expert_a[self.action_indices] = expert_a[self.action_indices]
-            # filtered_expert_a = expert_a[self.action_indices]
-            expert_a = filtered_expert_a
+            filtred_expert_a = np.zeros_like(expert_a)
+            filtred_expert_a[self.action_indices] = expert_a[self.action_indices]
+            expert_a = filtred_expert_a
 
         if intervened:
             return expert_a, True
-
+        
         return action, False
-
+    
     def step(self, action):
+        
         new_action, replaced = self.action(action)
+        
         obs, rew, done, truncated, info = self.env.step(new_action)
         if replaced:
             info["intervene_action"] = new_action
         info["left"] = self.left
         info["right"] = self.right
         return obs, rew, done, truncated, info
-
+    
     def close(self):
-        self.running = False
-        self.thread.join()
+        self.expert.close()
         super().close()

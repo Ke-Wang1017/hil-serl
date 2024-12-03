@@ -35,6 +35,8 @@ from serl_launcher.data.data_store import MemoryEfficientReplayBufferDataStore
 from experiments.mappings import CONFIG_MAPPING
 import mujoco.viewer
 
+from franka_sim.utils.viewer_utils import DualMujocoViewer
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
@@ -150,8 +152,11 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     intervention_count = 0
     intervention_steps = 0
 
+    # Create the dual viewer
+    dual_viewer = DualMujocoViewer(env.model, env.data)
+
     pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
-    with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
+    with dual_viewer as viewer:
         for step in pbar:
             timer.tick("total")
             viewer.sync()
@@ -181,7 +186,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 # override the action with the intervention action
                 if "intervene_action" in info:
                     actions = info.pop("intervene_action")
-                    print("intervened!!!")
+                    # print("intervened!!!")
                     intervention_steps += 1
                     if not already_intervened:
                         intervention_count += 1

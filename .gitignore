@@ -15,3 +15,5 @@ __pycache__/
 hil_serl_env
 serl_robot_infra/serl_robot_infra.egg-info/
 MUJOCO_LOG.TXT
+
+.venv

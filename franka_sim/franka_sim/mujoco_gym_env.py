@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional
 
-import gym
+# import gym
+import gymnasium as gym
 import mujoco
 import numpy as np
 

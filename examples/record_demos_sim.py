@@ -8,11 +8,11 @@ from absl import app, flags
 import time
 
 from experiments.mappings import CONFIG_MAPPING
-import mujoco.viewer
 from pynput import keyboard
+from franka_sim.utils.viewer_utils import DualMujocoViewer
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
+flags.DEFINE_string("exp_name", "pick_cube_sim", "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("successes_needed", 20, "Number of successful demos to collect.")
 
 start_key = False
@@ -41,8 +41,11 @@ def main(_):
     pbar = tqdm(total=success_needed)
     trajectory = []
     returns = 0
-    
-    with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
+
+    # Create the dual viewer
+    dual_viewer = DualMujocoViewer(env.unwrapped.model, env.unwrapped.data)
+
+    with dual_viewer as viewer:
         while viewer.is_running():
             if start_key:
                 actions = np.zeros(env.action_space.sample().shape) 
@@ -79,7 +82,7 @@ def main(_):
                     obs, info = env.reset()
             if success_count >= success_needed:
                 break
-            
+
     if not os.path.exists("./demo_data"):
         os.makedirs("./demo_data")
     uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
